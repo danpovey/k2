@@ -143,7 +143,7 @@ __host__ __device__ __forceinline__ double TraceMatMat(const Mat3 &mat) {
       ans += mat.m[i][j] * mat.m[i][j];
   }
   // we should be dealing with trace-free matrices.
-  K2_CHECK_LE(trace * trace, 0.001 * ans) << "hi";
+  K2_CHECK_LE(trace * trace, 0.001 * ans);
   return ans;
 
 }
@@ -169,7 +169,7 @@ __host__ __device__ double ComputeDensity(const Configuration configuration,
     double r = sqrt(DotProduct(direction, direction));
     if (r < 1.0e-20) r = 1.0e-20;  // avoid NaN or inf
     Scale(1.0 / r, &direction);  // make direction unit-length
-    double scale = configuration.masses[p] * pow(r, 1.0 / 3.0);
+    double scale = configuration.masses[p] * pow(r, -3.0);
     // sign might be opposite here and a scalar factor might be off,
     // but it won't matter for our purposes.
     AddVec2(scale, direction, &mat);

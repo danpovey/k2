@@ -39,7 +39,7 @@ TEST(ComputeIntegral, SinglePointAtOrigin) {
     double r = 5.0 * i;  // cube radius (==half edge length)
     double integral_error;
     double integral = ComputeIntegral(c, configuration, r,
-                                      1.0e-05,
+                                      1.0e-07,
                                       &integral_error);
     K2_LOG(INFO) << "For r = " << r << ", one mass at origin, integral = "
                  << integral << " with error " << integral_error;
