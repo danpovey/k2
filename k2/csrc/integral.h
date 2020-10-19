@@ -324,14 +324,8 @@ __device__ void SubdivideIntegral(const Configuration configuration,
   for (int d = 0; d < 3; d++)
     dest->volume.center.x[d] = src.volume.center.x[d] +
                                dest->volume.r * GetSign(n, d);
-  //dest->density = ComputeDensity(configuration,
-  //             dest->volume.center);
-  { // 1/r^2  NO, trying 1/r
-    double r_sq = DotProduct(dest->volume.center,
-                             dest->volume.center);
-    if (r_sq < 1.0e-20) r_sq = 1.0e-20;
-    dest->density = 1.0 / r_sq;
-  }
+  dest->density = ComputeDensity(configuration,
+                                 dest->volume.center);
 
   SetDerivNorm(src, dest, n);
 
