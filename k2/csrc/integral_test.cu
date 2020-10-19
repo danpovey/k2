@@ -37,12 +37,15 @@ TEST(ComputeIntegral, SinglePointAtOrigin) {
   ContextPtr c = GetCudaContext();
   for (int32_t i = 1; i < 4; i++) {
     double r = 5.0 * i;  // cube radius (==half edge length)
-    double integral_error;
+    double integral_error, integral_diff, abs_integral_diff;
     double integral = ComputeIntegral(c, configuration, r,
-                                      1.0e-07,
-                                      &integral_error);
+                                      1.0e-03,
+                                      &integral_error, &integral_diff,
+                                      &abs_integral_diff);
     K2_LOG(INFO) << "For r = " << r << ", one mass at origin, integral = "
-                 << integral << " with error " << integral_error;
+                 << integral << " with (error,diff,abs-diff) "
+                 << std::scientific << integral_error << "," << integral_diff
+                 << "," << abs_integral_diff << std::fixed;
   }
 }
 

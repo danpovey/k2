@@ -214,9 +214,17 @@ struct IntegralPart {
   // `integral` is the contribution of this cube to the integral we are
   // computing.
   double integral;
+
   // `integral_error >= 0` is the error in the integral we are computing,
-  // i.e. the amount by which `integral` could differ from the real value.
+  // i.e. the amount by which `integral` could differ from the real value,
+  // based on the deriv_norm.
   double integral_error;
+
+  // `integral_diff` is the difference between the parent 'integral'
+  // divided by 8, and this integral.  This is used for diagnostics but not for
+  // deciding when to stop splitting.
+  double integral_diff;
+
   // we'll set this to true if we'll subdivide this piece of integral.
   bool will_subdivide;
 };
@@ -226,6 +234,7 @@ inline std::ostream &operator << (std::ostream &os, const IntegralPart &i) {
      << ", density_deriv_norm=" << i.density_deriv_norm
      << ", integral=" << i.integral
      << ", integral-error=" << i.integral_error
+     << ", integral-diff=" << i.integral_diff
      << ", will-subdivide=" << i.will_subdivide << "}\n";
   return os;
 }
@@ -247,7 +256,7 @@ __device__ __forceinline__ int GetSign(int n, int dim) {
   // return (n & (1 << dim)) != 0 ? 1 : -1
   // the following is an optimization of the expression above which is intended
   // to avoid conditionals.
-  return ((n & (1 << dim) != 0) * 2) - 1;
+  return (((n & (1 << dim)) != 0) * 2) - 1;
 }
 
 
@@ -315,13 +324,21 @@ __device__ void SubdivideIntegral(const Configuration configuration,
   for (int d = 0; d < 3; d++)
     dest->volume.center.x[d] = src.volume.center.x[d] +
                                dest->volume.r * GetSign(n, d);
-  dest->density = ComputeDensity(configuration,
-                                 dest->volume.center);
+  //dest->density = ComputeDensity(configuration,
+  //             dest->volume.center);
+  { // 1/r^2  NO, trying 1/r
+    double r_sq = DotProduct(dest->volume.center,
+                             dest->volume.center);
+    if (r_sq < 1.0e-20) r_sq = 1.0e-20;
+    dest->density = 1.0 / r_sq;
+  }
+
   SetDerivNorm(src, dest, n);
 
   double volume = pow(2.0 * dest->volume.r, 3.0);
   dest->integral = dest->density * volume;
   dest->integral_error = (dest->density_deriv_norm * dest->volume.r) * volume;
+  dest->integral_diff = dest->integral - (src.integral / 8.0);
 }
 
 
@@ -331,7 +348,9 @@ double ComputeIntegral(ContextPtr &c,
                        double cutoff,  // e.g. 1.0e-06, as a cutoff of error in
                                        // integral per cube,determines how fine
                                        // mesh we use
-                       double *integral_error) {
+                       double *integral_error,
+                       double *integral_diff,
+                       double *abs_integral_diff) {
   K2_CHECK(c->GetDeviceType() == kCuda);  // these kernels are GPU-only.
 
   K2_LOG(INFO) << "Configuration is " << configuration;
@@ -343,77 +362,99 @@ double ComputeIntegral(ContextPtr &c,
   part.density_deriv_norm = 10.0;
   part.will_subdivide = true;
 
-  Array1<IntegralPart> parts(c, 1);  // `parts` will always contain cubes of a certain size.
-  parts = part;  // set that one element to `part`
+
+  // formerly we only had one of these arrays at a time, but for memory
+  // reasons we now break them up..
+  std::vector<std::unique_ptr<Array1<IntegralPart> > > parts_vec;
+  parts_vec.push_back(std::make_unique<Array1<IntegralPart> >(c, 1));
+  *(parts_vec.back()) = part;   // set that one element to `part`
 
   double tot_integral = 0.0,
-    tot_integral_error = 0.0;
-  for (int32_t iter =  0; parts.Dim() != 0; ++iter) {
-    //K2_LOG(INFO) << "Integral parts = " << parts.To(GetCpuContext());
-    int32_t num_parts = parts.Dim();
+      tot_integral_error = 0.0,
+      tot_integral_diff = 0.0,
+      tot_abs_integral_diff = 0.0;
+  for (int32_t iter =  0; !parts_vec.empty(); ++iter) {
+    std::unique_ptr<Array1<IntegralPart> > parts;
+    parts.swap(parts_vec.back());
+    parts_vec.pop_back();
+    const int32_t size_limit = (1 << 17);
+    if (parts->Dim() > size_limit) {
+      int32_t num_pieces = 0;
+      for (int32_t offset = 0; offset < parts->Dim(); offset += size_limit, num_pieces++) {
+        int32_t block_size = std::min<int32_t>(size_limit, parts->Dim() - offset);
+        parts_vec.push_back(std::make_unique<Array1<IntegralPart> >(
+            parts->Range(offset, block_size)));
+      }
+      continue;
+    }
+
+    int32_t num_parts = parts->Dim();
 
     // This renumbering will count only those parts to be subdivided.
-    Renumbering renumbering(c, parts.Dim());
+    Renumbering renumbering(c, parts->Dim());
     char *keep_data = renumbering.Keep().Data();
 
-    // we'll use itegral_vec this with ExclusiveSum (since we have no plain
+    // we'll use integral_vec this with ExclusiveSum (since we have no plain
     // Sum() in k2 right now), to figure out the sum of the non-subdivided parts
     // of `parts`.  This will contain zeros for the parts to be subdivided.
     Array1<double> integral_vec(c, num_parts + 1),
-      integral_error_vec(c, num_parts + 1);
+        integral_error_vec(c, num_parts + 1),
+        integral_diff_vec(c, num_parts + 1),
+        abs_integral_diff_vec(c, num_parts + 1);
     double *integral_vec_data = integral_vec.Data(),
-      *integral_error_vec_data = integral_error_vec.Data();
-    const IntegralPart *parts_data = parts.Data();
+        *integral_error_vec_data = integral_error_vec.Data(),
+        *integral_diff_vec_data = integral_diff_vec.Data(),
+        *abs_integral_diff_vec_data = abs_integral_diff_vec.Data();
+    const IntegralPart *parts_data = parts->Data();
     auto lambda_set_keep_and_integral = [=] __host__ __device__ (int32_t i) -> void {
       if (!(keep_data[i] = (parts_data[i].will_subdivide == true))) {
         integral_vec_data[i] = parts_data[i].integral;
         integral_error_vec_data[i] = parts_data[i].integral_error;
+        integral_diff_vec_data[i] = parts_data[i].integral_diff;
+        abs_integral_diff_vec_data[i] = abs(parts_data[i].integral_diff);
       } else {
         integral_vec_data[i] = 0.0;
         integral_error_vec_data[i] = 0.0;
+        integral_diff_vec_data[i] = 0.0;
+        abs_integral_diff_vec_data[i] = 0.0;
       }
     };
     Eval(c, num_parts, lambda_set_keep_and_integral);
     ExclusiveSum(integral_vec, &integral_vec);
     ExclusiveSum(integral_error_vec, &integral_error_vec);
-    K2_LOG(INFO) << "keep max value is " << (int)MaxValue(renumbering.Keep());
-    K2_LOG(INFO) << "Last elem of parts is " << parts.Back();
+    ExclusiveSum(integral_diff_vec, &integral_diff_vec);
+    ExclusiveSum(abs_integral_diff_vec, &abs_integral_diff_vec);
+    //K2_LOG(INFO) << "Last elem of parts is " << parts->Back();
     tot_integral += integral_vec[num_parts];
     tot_integral_error += integral_error_vec[num_parts];
+    tot_integral_diff += integral_diff_vec[num_parts];
+    tot_abs_integral_diff += abs_integral_diff_vec[num_parts];
 
-    int32_t num_kept = renumbering.NumNewElems();
-    K2_CHECK_LE(num_kept, num_parts);
-    K2_LOG(INFO) << "after iter " << iter << ", tot_integral = "
-                 << tot_integral << ", tot_integral_error = "
-                 << tot_integral_error << ", num-parts = "
-                 << num_parts << ", num-kept = "
-                 << num_kept;
+    int32_t num_subdivided = renumbering.NumNewElems();
+    K2_CHECK_LE(num_subdivided, num_parts);
+    if (iter % 5000 == 0) {
+      K2_LOG(INFO) << "after iter " << iter << ", tot_integral = "
+                   << tot_integral << ", (error,diff,abs-diff) = "
+                   << tot_integral_error << ","
+                   << tot_integral_diff << "," << tot_abs_integral_diff
+                   <<", num-parts=" << num_parts << ", num-kept = "
+                   << num_subdivided << ", parts_vec.size()="
+                   << parts_vec.size();
+    }
+    if (num_subdivided == 0) continue;
 
-    if (num_kept == 0) break;
-
-    int32_t new_num_parts = 8 * num_kept;
-    K2_CHECK(new_num_parts > num_kept);
+    int32_t new_num_parts = 8 * num_subdivided;
+    K2_CHECK(new_num_parts > num_subdivided);
     int32_t *new2old_data = renumbering.New2Old().Data();
     Array1<IntegralPart> new_parts(c, new_num_parts);
     IntegralPart *new_parts_data = new_parts.Data();
-
-
-    auto lambda_check = [=] __host__ __device__ (int32_t i) -> void {
-      if (num_kept == num_parts) {
-        K2_CHECK_EQ(new2old_data[i], i);
-      } else {
-        K2_CHECK_LT(new2old_data[i], num_parts);
-        K2_CHECK_GE(new2old_data[i], 0);
-      }
-    };
-    Eval(c, num_kept, lambda_check);
 
     auto lambda_set_new_parts = [=] __device__ (int32_t i) -> void {
       int32_t n = i % 8,
         group_i = i / 8,
         old_i = new2old_data[group_i];
       K2_CHECK_LE(static_cast<uint32_t>(group_i),
-                  static_cast<uint32_t>(num_kept));
+                  static_cast<uint32_t>(num_subdivided));
       K2_CHECK_LE(static_cast<uint32_t>(old_i),
                   static_cast<uint32_t>(num_parts));
       const IntegralPart *old_part = parts_data + old_i;
@@ -424,9 +465,11 @@ double ComputeIntegral(ContextPtr &c,
          (new_parts_data[i].integral_error >= cutoff);
     };
     EvalDevice(c, new_num_parts, lambda_set_new_parts);
-    parts = new_parts;
+    parts_vec.push_back(std::make_unique<Array1<IntegralPart> >(new_parts));
   }
   *integral_error = tot_integral_error;
+  *integral_diff = tot_integral_diff;
+  *abs_integral_diff = tot_abs_integral_diff;
   return tot_integral;
 }
 
