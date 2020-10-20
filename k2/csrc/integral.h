@@ -133,7 +133,7 @@ __host__ __device__ __forceinline__ void Scale(double alpha, Vec3 *a) {
 // symmetric so transpose doesn't matter)... it simplifies to the sum of squared
 // elements.  also checks that mat's trace is close to zero, which
 // is an expectation specific to our problem.
-__host__ __device__ __forceinline__ double TraceMatMat(const Mat3 &mat) {
+__host__ __device__ __forceinline__ double TraceMatSq(const Mat3 &mat) {
   double ans = 0.0, trace = 0.0;
 #pragma unroll
   for (int i = 0; i < 3; i++) {
@@ -147,10 +147,64 @@ __host__ __device__ __forceinline__ double TraceMatMat(const Mat3 &mat) {
   return ans;
 }
 
+// returns trace of the product (a b') (we are assuming a commutes with b so we
+// dont have to worry about transpose-ness).
+__host__ __device__ __forceinline__ double TraceMatMat(const Mat3 &a, const Mat3 &b) {
+  double ans = 0.0;
+#pragma unroll
+  for (int i = 0; i < 3; i++)
+#pragma unroll
+    for (int j = 0; j < 3; j++)
+      ans += a.m[i][j] * b.m[i][j];
+  return ans;
+}
+
+__host__ __device__ __forceinline__ double TraceMat(const Mat3 &a) {
+  return a.m[0][0] + a.m[1][1] + a.m[2][2];
+}
+
+// matrix product where the result is known to be symmetric (intended for powers of a symmetric matrix).
+__host__ __device__ __forceinline__ void MatmulSymmetric(const Mat3 &a, const Mat3 &b, Mat3 *c) {
+#pragma unroll
+  for (int i = 0; i < 3; i++) {
+#pragma unroll
+    for (int j = 0; j <= i; j++) {
+      double sum = 0.0;
+#pragma unroll
+      for (int k = 0; k < 3; k++)
+        sum += a.m[i][k] * b.m[j][k];
+      c->m[i][j] = c->m[j][i] = sum;
+    }
+  }
+}
+
+
 __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
-  double tmm = TraceMatMat(mat);  // tr(mat mat') == tr(mat mat), since mat is
-                                  // symmetric
-  return pow(tmm, 1.0 / 3);
+  //double tmm = TraceMatSq(mat);  // tr(mat mat') == tr(mat mat), since mat is
+  //// symmetric
+  double tmm = TraceMatMat(mat, mat);
+  if (tmm == 0.0)
+    return 0.0;
+
+  Mat3 mat_sq, mat_4;
+  MatmulSymmetric(mat, mat, &mat_sq);
+  MatmulSymmetric(mat_sq, mat_sq, &mat_4);
+  double pow2 = TraceMat(mat_sq);
+  if (pow2 == 0.0) return 0.0;
+  double pow3 = TraceMatMat(mat, mat_sq),
+      pow4 = TraceMat(mat_4),
+      pow5 = TraceMatMat(mat_4, mat),
+      pow6 = TraceMatMat(mat_4, mat_sq),
+      pow3_norm = pow3 * pow(pow2, -3.0/2.0),
+      pow4_norm = pow4 * pow(pow2, -4.0/2.0),
+      pow5_norm = pow5 * pow(pow2, -5.0/2.0),
+      pow6_norm = pow6 * pow(pow2, -6.0/2.0);
+
+  double alpha = 7.0, beta = 0.0, gamma = 0.0, delta = 10.0,
+      factor = 1.0 + pow3_norm * alpha + pow4_norm * beta +
+          pow5_norm * gamma + pow6_norm * delta;
+  K2_CHECK_GE(factor, 0);
+  return pow(pow2 * factor, 1.0 / 3);
 }
 
 __host__ __device__ double ComputeDensity(const Configuration configuration,
@@ -251,7 +305,7 @@ inline std::ostream &operator << (std::ostream &os, const IntegralPart &i) {
                     to have all combinations of signs present when
                     called for n = 0 through 7.
  */
-__device__ __forceinline__ int GetSign(int n, int dim) {
+__host__ __device__ __forceinline__ int GetSign(int n, int dim) {
   // return (n & (1 << dim)) != 0 ? 1 : -1
   // the following is an optimization of the expression above which is intended
   // to avoid conditionals.
