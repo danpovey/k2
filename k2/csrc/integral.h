@@ -71,7 +71,7 @@ inline std::ostream &operator << (std::ostream &os, const Configuration &c) {
 
 void InitConfigurationDefault(Configuration *c) {
   // zeroes points and masses, sets max_allowed_density to 1e+05;
-  c->max_allowed_density = 1.0e+05;
+  c->max_allowed_density = 1.0e+08;
   for (int i = 0; i < MAX_POINTS; i++) {
     c->masses[i] = 0.0;
     for (int j = 0; j < 3; j++)
@@ -145,7 +145,6 @@ __host__ __device__ __forceinline__ double TraceMatMat(const Mat3 &mat) {
   // we should be dealing with trace-free matrices.
   K2_CHECK_LE(trace * trace, 0.001 * ans);
   return ans;
-
 }
 
 __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
