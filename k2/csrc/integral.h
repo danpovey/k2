@@ -52,6 +52,13 @@ inline std::ostream& operator << (std::ostream &os, const Mat3 &m) {
 #define MAX_POINTS 4
 
 struct Configuration {
+  int32_t num_steps;  // number of steps in the integral table..
+  double *table;      // integral table pointer.. contains a density as a
+                      // function of a, with table[i] containing the density for
+                      // a=-0.5 + (1.5/num_steps)*i.  a is the value of the 2nd largest
+                      // eigenvalue of our symmetric trace-free matrix M, where
+                      // the largest has been normalized to 1.
+
   double max_allowed_density;  // e.g. 10000, this is to avoid inf's or nan's
                                // appearing in case we get extremely close to a
                                // point.  (The integrals dont diverge but the
@@ -211,7 +218,11 @@ __host__ __device__ void GetEigs(const Mat3 &mat, Vec3 *eigs) {
   if ((eigs->x[1]) < (eigs->x[2])) swap(eigs->x[1], eigs->x[2]);
 }
 
-__host__ __device__ double DensityGivenMat(const Mat3 &mat) {
+// see how num_steps and table are documented in struct Configuration
+// and function ComputeTable().
+__host__ __device__ double DensityGivenMat(int32_t num_steps,
+                                           double *table,
+                                           const Mat3 &mat) {
   //double tmm = TraceMatSq(mat);  // tr(mat mat') == tr(mat mat), since mat is
   //// symmetric
 
@@ -238,10 +249,32 @@ __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
 #else
   Vec3 eigs;
   GetEigs(mat, &eigs);
-  double tmm = eigs.x[0]*eigs.x[0] +
-      eigs.x[1]*eigs.x[1] +
-      eigs.x[2]*eigs.x[2];
 
+  if (eigs.x[0] == 0.0) return 0.0;
+
+  double factor1 = pow(eigs.x[0], 2.0/3),
+      a = eigs.x[1] / eigs.x[0];  // ratio of 2nd largest to largest eig.
+  K2_CHECK(a >= -0.50001 && a <= 1.0);
+  if (a < -0.5) a = -0.5;
+  // the next code uses the table to interpolate and find the function of a.
+  double step_size = 1.5 / num_steps;
+  // prev_step is the step to the left of this point.
+  double a_scaled = (a  - (-0.5)) / step_size;
+  int32_t prev_step = (int32_t)a_scaled;  // rounds down.
+  K2_CHECK(prev_step >= 0 && prev_step <= num_steps);
+  int32_t next_step = (prev_step == num_steps ? num_steps : prev_step + 1);
+  double next_weight = a_scaled - prev_step,
+      prev_weight = 1.0 - next_weight;
+  K2_CHECK(prev_weight >= 0.0 && next_weight <= 1.0);
+  double f_of_a = table[prev_step]*prev_weight + table[next_step]*next_weight;
+
+  return 10.0*f_of_a * factor1;
+
+
+  /*double tmm = eigs.x[0]*eigs.x[0] +
+      eigs.x[1]*eigs.x[1] +
+      eigs.x[2]*eigs.x[2];*/
+  /*
   double pos_eigs = 0, pos_eigs_sq = 0,
       neg_eigs = 0, neg_eigs_sq = 0,
       pos_eigs_pow = 0, neg_eigs_pow = 0;
@@ -253,7 +286,7 @@ __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
   //return pow(neg_eigs_sq + -0.05 * pos_eigs_sq, 1.0/3);
   //K2_CHECK(eigs.x[2] <= 0);
   //return pow(-eigs.x[2] - 0.5*eigs.x[1], 1.0/3);
-  return pos_eigs_pow + -0.25 * neg_eigs_pow;
+  return pos_eigs_pow + -0.25 * neg_eigs_pow;*/
 #endif
   //return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3);
 
@@ -290,7 +323,9 @@ __host__ __device__ double ComputeDensity(const Configuration configuration,
     AddScaledUnit(-scale / 3.0, &mat);
     // Note: trace of mat should stay zero.
   }
-  double ans = DensityGivenMat(mat);
+  double ans = DensityGivenMat(configuration.num_steps,
+                               configuration.table,
+                               mat);
   // the following is to avoid problems as we approach a singularity (they are
   // integrable but I dont want to deal with super large numbers).
   if (ans > configuration.max_allowed_density)
@@ -449,6 +484,107 @@ __device__ void SubdivideIntegral(const Configuration configuration,
   dest->integral_diff = dest->integral - (src.integral / 8.0);
 }
 
+/*
+  Computes a table of a certain integral that we're interested in (basically:
+  the integral over all unit directions with components (x,y,z), of:
+
+  expected value of:
+                 \theta(x^2 + y^2 a -  z^2 (1+a))^{2/3}
+  where \theta is the Heaviside step function.  This may seem a bit random
+  but... we are interested in a property of a trace-free 3x3 matrix M, which
+  we'll express in terms of its eigenvalues.  We normalize M so the most
+  positive eigenvalue is 1, and since M is trace-free (sum-eigs=0) there is
+  only one free parameter left, which we can identify with the second
+  eigenvalue.  We are then looking at a matrix with eigenvalues (1,a,-(1+a)).
+
+  The expected value of:
+       \theta(x^2 + y^2 a -  z^2 (1+a))^{2/3}
+  (where x^2+y^2+z^2 = 1, taken overan isotropic distribution of such directions
+  (x,y,z).
+
+  I wrote this as follows in Wolfram Alpha but it didn't manage to integrate it
+  (no surprises):
+
+   \int_{t=-pi,pi} \int_{f=0,pi} heaviside((cos(t)*sin(f))^2 + a*(sin(t)*sin(f))^2 - (a+1)*cos(f)^2)^(2/3)  sin(f) dt df
+
+ Note, t and f correspond to \theta and \phi in the normal formulation of an integral
+ in spherical co-ordinates.  We should probably divide the above by 4pi which is the integral
+ of when we replace the heaviside()^(2/3) expression with 1, but here we're not concerned with
+ constant factors.  The sin(f) comes from the integral in spherical co-ordinates itself.
+
+  We don't care about constant factors here so we drop a factor of 2 and the above
+  becomes:
+
+    \int_{t=0,pi} \int_{f=0,pi} heaviside((cos(t)*sin(f))^2 + a*(sin(t)*sin(f))^2 - (a+1)*cos(f)^2)^(2/3)  sin(f) dt df
+
+ Anyway, we want to tabulate the value of the above definite integral for different
+ values of a in the range -0.5 <= a <= 1.
+
+       @param [in] c  Context to use for allocating arrays
+       @param [in] num_steps   Number of steps to use for integrals and for the answer.
+                               So integrals from 0 to pi will be done in intervals of
+                               size pi/num_steps, and the values of `a` will be tabulated
+                               in intervals of 1.5/num_steps.
+ */
+Array1<double> ComputeTable(ContextPtr &c,
+                            int32_t num_steps) {
+  double a_step_size = 1.5 / num_steps;
+  // will transfer `ans` to GPU later.
+  Array1<double> ans(GetCpuContext(), num_steps + 1);
+  Array1<double> ans_rel(GetCpuContext(), num_steps + 1);
+  // `ans_rel` is something for debugging/diagnostics; it's the elements of
+  // `ans` divided by the sum-square of eigenvalues (1+a^2+(1+a)^2)= 2(1+a+a^2),
+  // which I was using before.
+  double *ans_data = ans.Data(), *ans_rel_data = ans_rel.Data();
+
+  // the `+1` is so we can get the sum with ExclusiveSum().
+  Array1<double> integral_pieces(c, num_steps * num_steps + 1);
+  double *integral_pieces_data = integral_pieces.Data();
+  for (int i = 0; i <= num_steps; i++) {
+    double a = -0.5 + a_step_size * i;
+
+    double angle_step_size = M_PI / num_steps;
+
+    auto lambda_set_integral_element = [=] __host__ __device__ (int32_t j, int32_t k) -> void {
+      // \int_{t=0,pi} \int_{f=0,pi} heaviside((cos(t)*sin(f))^2 + a*(sin(t)*sin(f))^2 - (a+1)*cos(f)^2)^(2/3)  sin(f) dt df
+
+      // note: the x,y and z directions are represented (not necessarily in order) by cos(t)*sinf(f),
+      // sin(t)*sin(f), and cos(f).
+
+      // think of t and f as theta and phi.  We represent the region from
+      // j*angle_step_size to (j+1)*angle_step_size, and we evaluate expressions
+      // in the middle of that region.
+      double t = 0.5*angle_step_size + angle_step_size * j,
+        f = 0.5*angle_step_size + angle_step_size * k,
+           cos_t = cos(t), cos_t2 = cos_t*cos_t, sin_t2 = 1.0 - cos_t2,
+      sin_f = sin(f), sin_f2 = sin_f*sin_f, cos_f2 = 1.0 - sin_f2;
+      // x2,y2,z2 represent the squares of the co-ordinate directions.
+      // (these may be in the wrong order; the order doesn't matter
+      // as a sphere is symmetric like that..)
+      double x2 = cos_t2 * sin_f2, y2 = sin_t2 * sin_f2, z2 = cos_f2;
+      K2_CHECK(abs(x2+y2+z2 - 1.0) < 0.0001);
+
+      // we arbitrarily let the x,y and z axes line up with the eigen-diections..
+      // of our trace-free symmetric matrix... `parenthesis` represents the magnitude
+      // of x^T M x where M has eigs (1,a,-(1+a)) and x is to be integrated over
+      // all unit directions...
+      double parenthesis = x2 + a*y2 - (a+1)*z2,
+        expr = (parenthesis > 0.0 ? pow(parenthesis, 2.0/3.0) : 0.0);
+      // we'll just be adding these up so it doesn't matter which
+      integral_pieces_data[num_steps*j + k] = expr * sin_f;
+    };
+    Eval2(c, num_steps, num_steps, lambda_set_integral_element);
+
+    ExclusiveSum(integral_pieces, &integral_pieces);
+    double sum = integral_pieces[num_steps * num_steps];
+    sum /= (num_steps * num_steps);
+    ans_data[i] = sum;
+    ans_rel_data[i] = sum / (2.0*(1 + a + a*a));
+  }
+  K2_LOG(INFO) << "ans = " << ans;
+  K2_LOG(INFO) << "ans_rel = " << ans_rel;
+  return ans.To(c);
+}
 
 double ComputeIntegral(ContextPtr &c,
                        const Configuration configuration,

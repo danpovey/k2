@@ -33,6 +33,11 @@
   return pos_eigs_pow + -0.3 * neg_eigs_pow; -> Rel stddev is  0.000108803
     return pos_eigs_pow + -0.23 * neg_eigs_pow; -> Rel stddev is  6.48388e-05
     return pos_eigs_pow + -0.25 * neg_eigs_pow; -> Rel stddev is  6.47524e-05
+ =========================
+ # note, the 10 is just to tune the number of integral cubes, constant factor
+ # doesn't matter.
+   return 10.0*f_of_a * factor1;  ->  Rel stddev is  0.00116604
+
 
   return pow(abs(eigs.x[0]) + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3); -> Rel variance is  0.0138227
   return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) ->  Rel variance is  0.0116099

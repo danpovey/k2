@@ -16,14 +16,20 @@
 
 namespace k2 {
 
-TEST(ComputeIntegral, DebugExclusiveSum) {
+// keep the array in scope while you need the table!
+Array1<double> SetTable(Configuration *conf) {
   ContextPtr c = GetCudaContext();
-  Array1<char> keep(c, 16777216 + 1, (char)0);
-  keep = keep.Range(0, keep.Dim() - 1);
+  int32_t num_steps = 100;
+  Array1<double> array = ComputeTable(c, num_steps);
+  conf->num_steps = num_steps;
+  conf->table = array.Data();
+  return array;
+}
 
-  Array1<int32_t> sum(c, keep.Dim() + 1);
-  ExclusiveSum(keep, &sum);
-  K2_CHECK_EQ(sum.Back(), 0);
+
+TEST(ComputeTable, Simple100) {
+  ContextPtr c = GetCudaContext();
+  ComputeTable(c, 100);
 }
 
 TEST(ComputeIntegral, SinglePointAtOrigin) {
@@ -33,6 +39,7 @@ TEST(ComputeIntegral, SinglePointAtOrigin) {
   Configuration configuration;
   InitConfigurationDefault(&configuration);
   configuration.masses[0] = 1.0;
+  auto a = SetTable(&configuration);
 
   ContextPtr c = GetCudaContext();
   for (int32_t i = 1; i < 2; i++) {
@@ -55,6 +62,7 @@ TEST(ComputeIntegral, TwoEqualPointsSeparatedByOne) {
   // should be the default (zero initialization) anyway...
   Configuration configuration;
   InitConfigurationDefault(&configuration);
+  auto a = SetTable(&configuration);
   configuration.masses[0] = 0.5;
   configuration.masses[1] = 0.5;
   // make the points separated by 1.0.
@@ -83,6 +91,7 @@ TEST(ComputeIntegral, TwoUnequalPointsSeparatedByOne) {
   // should be the default (zero initialization) anyway...
   Configuration configuration;
   InitConfigurationDefault(&configuration);
+  auto a = SetTable(&configuration);
   configuration.masses[0] = 0.25;
   configuration.masses[1] = 0.75;
   // make the points separated by 1.0.
@@ -112,7 +121,7 @@ TEST(ComputeIntegral, FourEqualPointsSeparatedByOne) {
   // should be the default (zero initialization) anyway...
   Configuration configuration;
   InitConfigurationDefault(&configuration);
-
+  auto a = SetTable(&configuration);
   // make the points separated by 1.0.
   for (int i = 0; i < 4; i++) {
     configuration.masses[i] = 0.25;
@@ -141,7 +150,7 @@ TEST(ComputeIntegral, FourPointsSimplex) {
   // should be the default (zero initialization) anyway...
   Configuration configuration;
   InitConfigurationDefault(&configuration);
-
+  auto a = SetTable(&configuration);
   // make the points separated by 1.0.
   for (int i = 0; i < 4; i++) {
     configuration.masses[i] = 0.25;
