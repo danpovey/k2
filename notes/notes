@@ -1,0 +1,50 @@
+(cd build;make); build/bin/cu_integral_test >& build/foo ; grep "For r" build/foo; grep "For r" build/foo  |  awk '{for (n=12;n<=15;n++) { if ($n == "=") { m=n+1; sum += $m; sumsq += $m*$m;}}} END{sumsq/=NR;sum/=NR; stddev=sqrt(sumsq - sum*sum); rel_stddev=stddev/sum; print "Rel stddev is ", rel_stddev;}'; grep "alpha =" k2/csrc/integral.h
+
+  return 1000.0 * pow(tmm, 1.0/3);  -> Rel stddev is  0.00124782
+  return  pow(tmm, 1.0/3);  -> Rel stddev is  0.00124817
+  return pow(abs(eigs.x[0]) + abs(eigs.x[1]) + abs(eigs.x[2]), 2.0 / 3);  -> Rel stddev is  0.0016257
+
+  double alpha = 1.0, beta = 0.0, gamma = 0.0, delta = 0.0, ->  Rel stddev is  0.0029565
+  double alpha = -1.0, beta = 0.0, gamma = 0.0, delta = 0.0 ->  Rel stddev is  0.00285662
+ double alpha = -0.5, beta = 0.0, gamma = 0.0, delta = 0.0, ->  Rel stddev is  0.000396197
+  double alpha = -0.66, beta = 0.0, gamma = 0.0, delta = 0.0 -> Rel stddev is  0.000994683
+  double alpha = -0.4, beta = 0.0, gamma = 0.0, delta = 0.0, ->Rel stddev is  0.000269894
+  double alpha = -0.33, beta = 0.0, gamma = 0.0, delta = 0.0, ->Rel stddev is  0.00039694
+  double alpha = -0.45, beta = 0.0, gamma = 0.0, delta = 0.0, ->Rel stddev is  0.000284813
+  double alpha = -0.40, beta = 0.0, gamma = 0.0, delta = 0.2 -> Rel stddev is  0.000348723
+  double alpha = -0.40, beta = 0.0, gamma = 0.0, delta = -0.2 ->  Rel stddev is  0.000298288
+  double alpha = -0.40, beta = 0.0, gamma = 0.0, delta = -0.1 -> Rel stddev is  0.000266256
+  double alpha = -0.35, beta = 0.0, gamma = 0.0, delta = -0.1, -> Rel stddev is  0.000302492
+   double alpha = -0.45, beta = 0.0, gamma = 0.0, delta = -0.1,->Rel stddev is  0.000341473
+
+  return pow(pos_eigs, 2.0/3); -> Rel stddev is  0.00162583
+  return pow(-neg_eigs, 2.0/3); -> Rel stddev is  0.00162583  # note, they are equal bc sum to zero, duh...
+  return pow(pos_eigs_sq, 1.0/3);    Rel stddev is  0.00175108
+  return pow(neg_eigs_sq, 1.0/3);  ->   Rel stddev is  0.000454318
+  return pow(neg_eigs_sq + -0.5 * pos_eigs_sq, 1.0/3); -> Rel stddev is  0.51
+  return pow(neg_eigs_sq + -0.1 * pos_eigs_sq, 1.0/3); -> Rel stddev is  0.000281398
+  return pow(neg_eigs_sq + -0.05 * pos_eigs_sq, 1.0/3); ->Rel stddev is  0.00035911
+  return pow(-eigs.x[2], 1.0/3); -> Rel stddev is  0.00104738
+  return pos_eigs_pow; (sum of pos-eigs^(1/3)) -> Rel stddev is  0.000197235
+  return pos_eigs_pow + 0.5 * neg_eigs_pow; -> Rel stddev is  0.000326828
+ return pos_eigs_pow + 0.1 * neg_eigs_pow; ->Rel stddev is  0.000236831
+ return pos_eigs_pow + -0.1 * neg_eigs_pow; -> Rel stddev is  0.000144393
+  return pos_eigs_pow + -0.2 * neg_eigs_pow; -> Rel stddev is  7.84704e-05
+  return pos_eigs_pow + -0.3 * neg_eigs_pow; -> Rel stddev is  0.000108803
+    return pos_eigs_pow + -0.23 * neg_eigs_pow; -> Rel stddev is  6.48388e-05
+    return pos_eigs_pow + -0.25 * neg_eigs_pow; -> Rel stddev is  6.47524e-05
+
+  return pow(abs(eigs.x[0]) + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3); -> Rel variance is  0.0138227
+  return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) ->  Rel variance is  0.0116099
+  return pow(abs(eigs.x[0]-eigs.x[1]) + abs(eigs.x[1]-eigs.x[2]) + abs(eigs.x[2]-eigs.x[0]), 2.0/3); -> Rel variance is  0.0125291
+ return pow(abs(eigs.x[0]*eigs.x[1]) + abs(eigs.x[1]*eigs.x[2]) + abs(eigs.x[2]*eigs.x[0]), 1.0/3); -> Rel variance is  0.0243561
+  return pow(abs(eigs.x[0]-eigs.x[2]), 2.0/3);->Rel variance is  0.0201416
+
+
+ return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3); -> Rel variance is  0.00770305
+ return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + 2.0*pow(tmm, 1.0/3); -> Rel variance is  0.00576356
+ return 0.2 * (pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + 2.0*pow(tmm, 1.0/3)); -> Rel variance is  0.0288177
+
+  return 10.0 * pow(tmm, 1.0/3);  -> Rel variance is  0.00228911
+
+  return 1000.0 * pow(tmm, 1.0/3);  -> Rel variance is  2.28944e-05

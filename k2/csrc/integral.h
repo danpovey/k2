@@ -179,13 +179,43 @@ __host__ __device__ __forceinline__ void MatmulSymmetric(const Mat3 &a, const Ma
 }
 
 
+__host__ __device__ void swap (double &a, double &b) {
+  double temp = b; b = a; a = temp;
+}
+__host__ __device__ void GetEigs(const Mat3 &mat, Vec3 *eigs) {
+  //  auto A = mat.m;
+  double beta = mat.m[0][1]*mat.m[0][1] +  mat.m[0][2]*mat.m[0][2] + mat.m[1][2]*mat.m[1][2]
+      - mat.m[0][0]*mat.m[1][1] - mat.m[1][1]*mat.m[2][2] - mat.m[2][2]*mat.m[0][0],
+      gamma = mat.m[0][0]*mat.m[1][1]*mat.m[2][2] + 2*mat.m[0][1]*mat.m[1][2]*mat.m[0][2]
+      - mat.m[0][0]*mat.m[1][2]*mat.m[1][2] - mat.m[0][1]*mat.m[0][1]*mat.m[2][2] - mat.m[0][2]*mat.m[0][2]*mat.m[1][1];
+  if (beta < 1.0e-30) {
+    eigs->x[0] = 0;
+    eigs->x[1] = 0;
+    eigs->x[2] = 0;
+    return;
+  }
+  double sqrt_abs_p_3 = sqrt(beta / 3),
+      val = gamma / (2*pow(sqrt_abs_p_3,3));
+  // sometimes `val` goes very slightly out of the range [-1,1] which causes
+  // NaNs; stop this from happening.
+  if (val > 1.0) val = 1.0;
+  if (val < -1.0) val = -1.0;
+  double phi = acos(val);
+  eigs->x[0] = 2 * sqrt_abs_p_3 * cos(phi / 3);
+  eigs->x[1] = - 2 * sqrt_abs_p_3 * cos((phi - M_PI) / 3);
+  eigs->x[2] = - 2 * sqrt_abs_p_3 * cos((phi + M_PI) / 3);
+
+  // order from most positive to most negative.
+  if ((eigs->x[0]) < (eigs->x[1])) swap(eigs->x[0], eigs->x[1]);
+  if ((eigs->x[0]) < (eigs->x[2])) swap(eigs->x[0], eigs->x[2]);
+  if ((eigs->x[1]) < (eigs->x[2])) swap(eigs->x[1], eigs->x[2]);
+}
+
 __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
   //double tmm = TraceMatSq(mat);  // tr(mat mat') == tr(mat mat), since mat is
   //// symmetric
-  double tmm = TraceMatMat(mat, mat);
-  if (tmm == 0.0)
-    return 0.0;
 
+#if 0
   Mat3 mat_sq, mat_4;
   MatmulSymmetric(mat, mat, &mat_sq);
   MatmulSymmetric(mat_sq, mat_sq, &mat_4);
@@ -200,11 +230,42 @@ __host__ __device__ double DensityGivenMat(const Mat3 &mat) {
       pow5_norm = pow5 * pow(pow2, -5.0/2.0),
       pow6_norm = pow6 * pow(pow2, -6.0/2.0);
 
-  double alpha = 7.0, beta = 0.0, gamma = 0.0, delta = 10.0,
+  double alpha = -0.40, beta = 0.0, gamma = 0.0, delta = -0.05,
       factor = 1.0 + pow3_norm * alpha + pow4_norm * beta +
           pow5_norm * gamma + pow6_norm * delta;
   K2_CHECK_GE(factor, 0);
-  return pow(pow2 * factor, 1.0 / 3);
+  return factor * pow(pow2, 1.0/3);
+#else
+  Vec3 eigs;
+  GetEigs(mat, &eigs);
+  double tmm = eigs.x[0]*eigs.x[0] +
+      eigs.x[1]*eigs.x[1] +
+      eigs.x[2]*eigs.x[2];
+
+  double pos_eigs = 0, pos_eigs_sq = 0,
+      neg_eigs = 0, neg_eigs_sq = 0,
+      pos_eigs_pow = 0, neg_eigs_pow = 0;
+  for (int i = 0; i < 3; i++) {
+    double eig = eigs.x[i];
+    if (eig > 0) { pos_eigs += eig;  pos_eigs_sq += eig*eig; pos_eigs_pow += pow(eig, 1.0/3); }
+    else { neg_eigs += eig;  neg_eigs_sq += eig*eig; neg_eigs_pow += pow(-eig, 1.0/3); }
+  }
+  //return pow(neg_eigs_sq + -0.05 * pos_eigs_sq, 1.0/3);
+  //K2_CHECK(eigs.x[2] <= 0);
+  //return pow(-eigs.x[2] - 0.5*eigs.x[1], 1.0/3);
+  return pos_eigs_pow + -0.25 * neg_eigs_pow;
+#endif
+  //return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3);
+
+  //return pow(abs(eigs.x[0]*eigs.x[1]) + abs(eigs.x[1]*eigs.x[2]) + abs(eigs.x[2]*eigs.x[0]), 1.0/3);
+
+  // return pow(abs(eigs.x[0]-eigs.x[2]), 2.0/3);
+
+  //  return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3);
+
+  //      + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3);
+      //return pow(tmm, 1.0 / 3.0) - pow(abs(eigs.x[0]*eigs.x[1]*eigs.x[2])
+      //return pow(tmm, 1.0 / 3.0) - pow(abs(eigs.x[0]*eigs.x[1]*eigs.x[2])
 }
 
 __host__ __device__ double ComputeDensity(const Configuration configuration,
