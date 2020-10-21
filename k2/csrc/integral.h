@@ -218,6 +218,28 @@ __host__ __device__ void GetEigs(const Mat3 &mat, Vec3 *eigs) {
   if ((eigs->x[1]) < (eigs->x[2])) swap(eigs->x[1], eigs->x[2]);
 }
 
+// return a number between -1 and 1 which characterizes the relationship between
+// the eigenvalues, but not their scale.
+__host__ __device__ double GetCosAngle(const Mat3 &mat) {
+  //  auto A = mat.m;
+  double beta = mat.m[0][1]*mat.m[0][1] +  mat.m[0][2]*mat.m[0][2] + mat.m[1][2]*mat.m[1][2]
+      - mat.m[0][0]*mat.m[1][1] - mat.m[1][1]*mat.m[2][2] - mat.m[2][2]*mat.m[0][0],
+      gamma = mat.m[0][0]*mat.m[1][1]*mat.m[2][2] + 2*mat.m[0][1]*mat.m[1][2]*mat.m[0][2]
+      - mat.m[0][0]*mat.m[1][2]*mat.m[1][2] - mat.m[0][1]*mat.m[0][1]*mat.m[2][2] - mat.m[0][2]*mat.m[0][2]*mat.m[1][1];
+  if (beta < 1.0e-100) {
+    return 0.0;
+  }
+
+  double sqrt_abs_p_3 = sqrt(beta / 3),
+      val = gamma / (2*pow(sqrt_abs_p_3,3));
+  // sometimes `val` goes very slightly out of the range [-1,1] which causes
+  // NaNs; stop this from happening.
+  if (val > 1.0) val = 1.0;
+  if (val < -1.0) val = -1.0;
+  return val;
+}
+
+
 // see how num_steps and table are documented in struct Configuration
 // and function ComputeTable().
 __host__ __device__ double DensityGivenMat(int32_t num_steps,
@@ -246,7 +268,7 @@ __host__ __device__ double DensityGivenMat(int32_t num_steps,
           pow5_norm * gamma + pow6_norm * delta;
   K2_CHECK_GE(factor, 0);
   return factor * pow(pow2, 1.0/3);
-#else
+#elsif 0
   Vec3 eigs;
   GetEigs(mat, &eigs);
 
@@ -270,7 +292,6 @@ __host__ __device__ double DensityGivenMat(int32_t num_steps,
 
   return 10.0*f_of_a * factor1;
 
-
   /*double tmm = eigs.x[0]*eigs.x[0] +
       eigs.x[1]*eigs.x[1] +
       eigs.x[2]*eigs.x[2];*/
@@ -287,18 +308,16 @@ __host__ __device__ double DensityGivenMat(int32_t num_steps,
   //K2_CHECK(eigs.x[2] <= 0);
   //return pow(-eigs.x[2] - 0.5*eigs.x[1], 1.0/3);
   return pos_eigs_pow + -0.25 * neg_eigs_pow;*/
+#else
+  double pow2 = TraceMatSq(mat),
+      cos_angle = GetCosAngle(mat),  // -1 <= cos <= 1.
+      cos2_angle = cos_angle * cos_angle,
+      cos3_angle = cos_angle * cos2_angle,
+      sin2_angle = 1.0 - cos2_angle,
+      sin_angle = sin(acos(cos_angle)),
+      angle = acos(cos_angle);
+  return  (1.0-0.18*cos_angle-0.005*sin_angle+0.005*sin2_angle) * pow(pow2, 1.0/3);
 #endif
-  //return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3);
-
-  //return pow(abs(eigs.x[0]*eigs.x[1]) + abs(eigs.x[1]*eigs.x[2]) + abs(eigs.x[2]*eigs.x[0]), 1.0/3);
-
-  // return pow(abs(eigs.x[0]-eigs.x[2]), 2.0/3);
-
-  //  return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) + pow(tmm, 1.0/3);
-
-  //      + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3);
-      //return pow(tmm, 1.0 / 3.0) - pow(abs(eigs.x[0]*eigs.x[1]*eigs.x[2])
-      //return pow(tmm, 1.0 / 3.0) - pow(abs(eigs.x[0]*eigs.x[1]*eigs.x[2])
 }
 
 __host__ __device__ double ComputeDensity(const Configuration configuration,
@@ -564,12 +583,12 @@ Array1<double> ComputeTable(ContextPtr &c,
       double x2 = cos_t2 * sin_f2, y2 = sin_t2 * sin_f2, z2 = cos_f2;
       K2_CHECK(abs(x2+y2+z2 - 1.0) < 0.0001);
 
-      // we arbitrarily let the x,y and z axes line up with the eigen-diections..
+      // we arbitrarily let the x,y and z axes line up with the eigen-directions..
       // of our trace-free symmetric matrix... `parenthesis` represents the magnitude
       // of x^T M x where M has eigs (1,a,-(1+a)) and x is to be integrated over
       // all unit directions...
       double parenthesis = x2 + a*y2 - (a+1)*z2,
-        expr = (parenthesis > 0.0 ? pow(parenthesis, 2.0/3.0) : 0.0);
+        expr = (parenthesis > 0.0 ? pow(parenthesis, 1.0/3.0) : 0.0);
       // we'll just be adding these up so it doesn't matter which
       integral_pieces_data[num_steps*j + k] = expr * sin_f;
     };
@@ -578,6 +597,7 @@ Array1<double> ComputeTable(ContextPtr &c,
     ExclusiveSum(integral_pieces, &integral_pieces);
     double sum = integral_pieces[num_steps * num_steps];
     sum /= (num_steps * num_steps);
+    sum *= sum;  // we used power 1/3 in the integral.
     ans_data[i] = sum;
     ans_rel_data[i] = sum / (2.0*(1 + a + a*a));
   }

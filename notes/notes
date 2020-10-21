@@ -34,10 +34,44 @@
     return pos_eigs_pow + -0.23 * neg_eigs_pow; -> Rel stddev is  6.48388e-05
     return pos_eigs_pow + -0.25 * neg_eigs_pow; -> Rel stddev is  6.47524e-05
  =========================
- # note, the 10 is just to tune the number of integral cubes, constant factor
- # doesn't matter.
-   return 10.0*f_of_a * factor1;  ->  Rel stddev is  0.00116604
+  # note, the 10 is just to tune the number of integral cubes, constant factor
+  # doesn't matter.
+  return 10.0*f_of_a * factor1;  ->  Rel stddev is  0.00116604
+   # As above but computing integral with 1/3 power of arg then squaring afterward:
+         Rel stddev is  0.000296888
+=============
+  return  (1.0+cos_angle) * pow(pow2, 1.0/3); -> Rel stddev is  0.00420895
+  return  (1.0+0.5*cos_angle) * pow(pow2, 1.0/3); -> Rel stddev is  0.00321478
+  return  (1.0+0.2*cos_angle)  * pow(pow2, 1.0/3); ->  Rel stddev is  0.00222609
+  return  (1.0-0.2*cos_angle) * pow(pow2, 1.0/3); -> Rel stddev is  0.000368394
+  return  (1.0-0.15*cos_angle) * pow(pow2, 1.0/3); ->Rel stddev is  0.000315268
+  return  (1.0-0.15*cos_angle+0.1*sin_angle) * pow(pow2, 1.0/3); ->Rel stddev is  0.00212843
+ ->return  (1.0-0.15*cos_angle-0.1*sin_angle) * pow(pow2, 1.0/3)-> Rel stddev is  0.00242893
+return  (1.0-0.15*cos_angle-0.02*sin_angle) * pow(pow2, 1.0/3);-> Rel stddev is  0.000657689
+  return  (1.0-0.15*cos_angle+0.02*sin_angle) * pow(pow2, 1.0/3); -> Rel stddev is 0.000418868
+   return  (1.0-0.125*cos_angle) * pow(pow2, 1.0/3); ->Rel stddev is  0.000456749
+   return  (1.0-0.175*cos_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000264359
+  return  (1.0-0.225*cos_angle) * pow(pow2, 1.0/3); ->Rel stddev is  0.00056175
+  return  (1.0-0.19*cos_angle) * pow(pow2, 1.0/3); ->Rel stddev is  0.000311165
+  return  (1.0-0.19*cos_angle+0.05*cos2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000420418
+  return  (1.0-0.175*cos_angle-0.05*cos2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.00065988
+  return  (1.0-0.175*cos_angle-0.02*cos2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000369426
+  return  (1.0-0.175*cos_angle+0.02*cos2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000305123
+    return  (1.0-0.175*cos_angle+0.02*sin2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000346104
+return  (1.0-0.175*cos_angle-0.02*cos3_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000414005
+  return  (1.0-0.15*cos_angle+0.05*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.00116659
+    return  (1.0-0.15*cos_angle+0.1*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.00242576
+  return  (1.0-0.15*cos_angle+0.02*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000457798
 
+  return  (1.0-0.20*cos_angle-0.02*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000370314
+
+  return  (1.0-0.20*cos_angle-0.03*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000601735
+  return  (1.0-0.18*cos_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000273638
+  return  (1.0-0.18*cos_angle+0.01*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000421143
+   return  (1.0-0.18*cos_angle-0.01*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is Rel stddev is  0.000286383
+     return  (1.0-0.18*cos_angle-0.005*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000254399
+  return  (1.0-0.18*cos_angle-0.005*sin_angle-0.005*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000254412
+    return  (1.0-0.18*cos_angle-0.005*sin_angle-0.005*sin2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.00025441
 
   return pow(abs(eigs.x[0]) + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3); -> Rel variance is  0.0138227
   return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) ->  Rel variance is  0.0116099
