@@ -268,12 +268,11 @@ __host__ __device__ double DensityGivenMat(int32_t num_steps,
           pow5_norm * gamma + pow6_norm * delta;
   K2_CHECK_GE(factor, 0);
   return factor * pow(pow2, 1.0/3);
-#elsif 0
+#elif 0
   Vec3 eigs;
   GetEigs(mat, &eigs);
 
   if (eigs.x[0] == 0.0) return 0.0;
-
   double factor1 = pow(eigs.x[0], 2.0/3),
       a = eigs.x[1] / eigs.x[0];  // ratio of 2nd largest to largest eig.
   K2_CHECK(a >= -0.50001 && a <= 1.0);
@@ -289,30 +288,30 @@ __host__ __device__ double DensityGivenMat(int32_t num_steps,
       prev_weight = 1.0 - next_weight;
   K2_CHECK(prev_weight >= 0.0 && next_weight <= 1.0);
   double f_of_a = table[prev_step]*prev_weight + table[next_step]*next_weight;
-
-  return 10.0*f_of_a * factor1;
-
+  return 5.0*f_of_a * factor1;
+#elif 1
+  Vec3 eigs;
+  GetEigs(mat, &eigs);
+  if (eigs.x[0] == 0.0) return 0.0;
   /*double tmm = eigs.x[0]*eigs.x[0] +
       eigs.x[1]*eigs.x[1] +
       eigs.x[2]*eigs.x[2];*/
-  /*
   double pos_eigs = 0, pos_eigs_sq = 0,
       neg_eigs = 0, neg_eigs_sq = 0,
       pos_eigs_pow = 0, neg_eigs_pow = 0;
   for (int i = 0; i < 3; i++) {
     double eig = eigs.x[i];
-    if (eig > 0) { pos_eigs += eig;  pos_eigs_sq += eig*eig; pos_eigs_pow += pow(eig, 1.0/3); }
-    else { neg_eigs += eig;  neg_eigs_sq += eig*eig; neg_eigs_pow += pow(-eig, 1.0/3); }
+    if (eig > 0) { pos_eigs += eig;  pos_eigs_sq += eig*eig; pos_eigs_pow += pow(eig, 2.0/3); }
+    else { neg_eigs += eig;  neg_eigs_sq += eig*eig; neg_eigs_pow += pow(-eig, 2.0/3); }
   }
   //return pow(neg_eigs_sq + -0.05 * pos_eigs_sq, 1.0/3);
   //K2_CHECK(eigs.x[2] <= 0);
   //return pow(-eigs.x[2] - 0.5*eigs.x[1], 1.0/3);
-  return pos_eigs_pow + -0.25 * neg_eigs_pow;*/
+  return (pos_eigs_pow + -0.495 * neg_eigs_pow);
 #else
   double pow2 = TraceMatSq(mat),
       cos_angle = GetCosAngle(mat),  // -1 <= cos <= 1.
       cos2_angle = cos_angle * cos_angle,
-      cos3_angle = cos_angle * cos2_angle,
       sin2_angle = 1.0 - cos2_angle,
       sin_angle = sin(acos(cos_angle)),
       angle = acos(cos_angle);
@@ -587,8 +586,10 @@ Array1<double> ComputeTable(ContextPtr &c,
       // of our trace-free symmetric matrix... `parenthesis` represents the magnitude
       // of x^T M x where M has eigs (1,a,-(1+a)) and x is to be integrated over
       // all unit directions...
-      double parenthesis = x2 + a*y2 - (a+1)*z2,
-        expr = (parenthesis > 0.0 ? pow(parenthesis, 1.0/3.0) : 0.0);
+      double neg_sign_scale = -0.60,
+         parenthesis = x2 + a*y2 - (a+1)*z2,
+         sign_scale = (parenthesis < 0 ? neg_sign_scale : 1.0),
+         expr = sign_scale * pow(abs(parenthesis), 2.0/3.0);
       // we'll just be adding these up so it doesn't matter which
       integral_pieces_data[num_steps*j + k] = expr * sin_f;
     };
@@ -597,7 +598,7 @@ Array1<double> ComputeTable(ContextPtr &c,
     ExclusiveSum(integral_pieces, &integral_pieces);
     double sum = integral_pieces[num_steps * num_steps];
     sum /= (num_steps * num_steps);
-    sum *= sum;  // we used power 1/3 in the integral.
+    //sum *= sum;  // we used power 1/3 in the integral.
     ans_data[i] = sum;
     ans_rel_data[i] = sum / (2.0*(1 + a + a*a));
   }

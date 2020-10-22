@@ -25,20 +25,47 @@
   return pow(neg_eigs_sq + -0.1 * pos_eigs_sq, 1.0/3); -> Rel stddev is  0.000281398
   return pow(neg_eigs_sq + -0.05 * pos_eigs_sq, 1.0/3); ->Rel stddev is  0.00035911
   return pow(-eigs.x[2], 1.0/3); -> Rel stddev is  0.00104738
-  return pos_eigs_pow; (sum of pos-eigs^(1/3)) -> Rel stddev is  0.000197235
-  return pos_eigs_pow + 0.5 * neg_eigs_pow; -> Rel stddev is  0.000326828
- return pos_eigs_pow + 0.1 * neg_eigs_pow; ->Rel stddev is  0.000236831
- return pos_eigs_pow + -0.1 * neg_eigs_pow; -> Rel stddev is  0.000144393
-  return pos_eigs_pow + -0.2 * neg_eigs_pow; -> Rel stddev is  7.84704e-05
-  return pos_eigs_pow + -0.3 * neg_eigs_pow; -> Rel stddev is  0.000108803
-    return pos_eigs_pow + -0.23 * neg_eigs_pow; -> Rel stddev is  6.48388e-05
-    return pos_eigs_pow + -0.25 * neg_eigs_pow; -> Rel stddev is  6.47524e-05
+
+# pos_eigs_pos is sum of eigs^2/3
+  return pos_eigs_pow + -0.24 * neg_eigs_pow; Rel stddev is  0.0010378
+    return pos_eigs_pow -> Rel stddev is  0.00140792
+
+ return pos_eigs_pow + -0.5 * neg_eigs_pow; ->  Rel stddev is  0.000192793
+ return pos_eigs_pow + -0.55 * neg_eigs_pow; ->Rel stddev is  0.000576077
+  return pos_eigs_pow + -0.45 * neg_eigs_pow; ->   Rel stddev is  0.000321848
+return pos_eigs_pow + -0.475 * neg_eigs_pow; -> Rel stddev is  0.000211035
+  return pos_eigs_pow + -0.49 * neg_eigs_pow; -> Rel stddev is  0.000179328 <------ Best with eigs.
+return pos_eigs_pow + -0.485 * neg_eigs_pow; -> Rel stddev is  0.000184084
+  return pos_eigs_pow + -0.495 * neg_eigs_pow; -> Rel stddev is  0.000182098
+
+HERE (above)... is the best one...
+
  =========================
   # note, the 10 is just to tune the number of integral cubes, constant factor
   # doesn't matter.
   return 10.0*f_of_a * factor1;  ->  Rel stddev is  0.00116604
    # As above but computing integral with 1/3 power of arg then squaring afterward:
          Rel stddev is  0.000296888
+ as above but with neg_sign_scale = -0.5  -> Rel stddev is  0.00512772
+  as above but with neg_sign_scale = -0.1  -> Rel stddev is 0.000322598
+  as above but neg_sign_scale = -0.075, -> Rel stddev is  0.000261929
+..  neg_sign_scale = -0.05, -> Rel stddev is  0.000239157
+  Wait, just realized the above was with 1/3 power in integral then squaring
+  afterward, stopping that and using 2/3 power
+    neg_sign_scale = 0.0 -> Rel stddev is  0.00116626
+    neg_sign_scale = -0.2 -> Rel stddev is  0.000979471
+   neg_sign_scale = -0.4 ->   Rel stddev is  0.000643887
+ neg_sign_scale = -0.5 ->   Rel stddev is  0.000369087
+ neg_sign_scale = -0.66 -> Rel stddev is  0.00084924
+  neg_sign_scale = -0.55 ->  Rel stddev is  0.000241166
+  neg_sign_scale = -0.575 -> Rel stddev is  0.000250186
+  # as above but with 200 not 100 steps in integral
+  neg_sign_scale=-0.525->  Rel stddev is  0.000325061
+  neg_sign_scale=-0.5->  Rel stddev is  0.000404438
+  neg_sign_scale =-0.55->Rel stddev is  0.000254502
+  neg_sign_scale =-0.575->Rel stddev is  0.000228082 <------ best with integral.
+  neg_sign_scale =-0.60->Rel stddev is  0.000291742
+
 =============
   return  (1.0+cos_angle) * pow(pow2, 1.0/3); -> Rel stddev is  0.00420895
   return  (1.0+0.5*cos_angle) * pow(pow2, 1.0/3); -> Rel stddev is  0.00321478
@@ -70,8 +97,8 @@ return  (1.0-0.175*cos_angle-0.02*cos3_angle) * pow(pow2, 1.0/3);->Rel stddev is
   return  (1.0-0.18*cos_angle+0.01*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000421143
    return  (1.0-0.18*cos_angle-0.01*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is Rel stddev is  0.000286383
      return  (1.0-0.18*cos_angle-0.005*sin_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000254399
-  return  (1.0-0.18*cos_angle-0.005*sin_angle-0.005*angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000254412
-    return  (1.0-0.18*cos_angle-0.005*sin_angle-0.005*sin2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.00025441
+ return  (1.0-0.18*cos_angle-0.005*sin_angle-0.005*sin2_angle) * pow(pow2, 1.0/3);->Rel stddev is  0.000262281
+return  (1.0-0.18*cos_angle-0.005*sin_angle+0.005*sin2_angle) * pow(pow2, 1.0/3);-> Rel stddev is  0.000254494
 
   return pow(abs(eigs.x[0]) + abs(eigs.x[1]) + abs(eigs.x[2]) + 0.5*sqrt(tmm), 2.0 / 3); -> Rel variance is  0.0138227
   return pow(abs(eigs.x[0]), 2.0/3) + pow(abs(eigs.x[1]), 2.0/3) + pow(abs(eigs.x[2]), 2.0/3) ->  Rel variance is  0.0116099

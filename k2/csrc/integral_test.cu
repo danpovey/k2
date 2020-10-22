@@ -19,7 +19,7 @@ namespace k2 {
 // keep the array in scope while you need the table!
 Array1<double> SetTable(Configuration *conf) {
   ContextPtr c = GetCudaContext();
-  int32_t num_steps = 100;
+  int32_t num_steps = 200;
   Array1<double> array = ComputeTable(c, num_steps);
   conf->num_steps = num_steps;
   conf->table = array.Data();
