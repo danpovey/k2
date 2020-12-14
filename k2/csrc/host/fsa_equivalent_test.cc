@@ -93,6 +93,17 @@ TEST(FsaEquivalent, IsRandEquivalent) {
     EXPECT_TRUE(status);
   }
 
+
+  { // shortest-distance for non-top-sorted input (works only for max semiring).
+    std::vector<Arc> arcs = {
+      {0, 2, 1, 1},  {1, 3, -1, 2}, {2, 1, 1, 1}
+    };
+    FsaCreator fsa_creator(arcs, 3);
+    Fsa fsa = fsa_creator.GetFsa();
+    bool status = IsRandEquivalent(fsa, fsa);
+    EXPECT_TRUE(status);
+  }
+
   {
     // same fsas
     std::vector<Arc> arcs_a = {
