@@ -1433,19 +1433,6 @@ Array1<FloatType> BackpropGetBackwardScores(
 
 
   ContextPtr cpu = GetCpuContext();
-  Array1<int32_t> arc_batches_row_splits12 =
-      entering_arc_batches.RowSplits(2)[entering_arc_batches.RowSplits(1)],
-      arc_batches_row_splits123 =
-      entering_arc_batches.RowSplits(3)[arc_batches_row_splits12],
-      arc_batches_row_splits123_cpu = arc_batches_row_splits123.To(cpu);
-
-  const int32_t *state_batches_data = state_batches.values.Data(),
-                  *arc_batches_data = entering_arc_batches.values.Data(),
-    *arc_batches_row_splits123_data = arc_batches_row_splits123.Data(),
-*arc_batches_row_splits123_cpu_data = arc_batches_row_splits123_cpu.Data(),
- *arc_batches_row_splits12_cpu_data = arc_batches_row_splits12_cpu.Data();
-
-  int32_t num_batches = entering_arc_batches.Dim0();
 
   if (log_semiring) {
     // For each batch of states:
@@ -1464,12 +1451,6 @@ Array1<FloatType> BackpropGetBackwardScores(
     //      backward_scores_deriv.
 
 
-    for (int32_t i = 0; i < num_batches; i++) {
-      int32_t begin_arc = arc_batches_row_splits123_data[i],
-                end_arc = arc_batches_row_splits123_data[i + 1],
-          this_num_arcs = end_arc - begin_arc;
-
-
 
   } else {
     // in a single kernel, figure out the contribution of each arc to its
@@ -1480,7 +1461,6 @@ Array1<FloatType> BackpropGetBackwardScores(
     // entering_arc_batches.  At the same time (while processing
     // entering_arc_batches), write to arc_scores_deriv (involves the
     // backward_scores_deriv_copy of the source-state
-
 
   }
 }
