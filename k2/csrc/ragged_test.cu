@@ -2584,7 +2584,7 @@ TEST(RaggedShapeOpsTest, RaggedShapeAxis0Splitter) {
         int32_t offset, offset2, offset3;
         RaggedShape sub_shape1 = random.Index(0, i, &offset),
                     sub_shape2 = splitter.GetElement(i, &offset2);
-        offset3 = splitter.GetElemOffset(i, random.NumAxes() - 1);
+        offset3 = splitter.GetOffset(i, random.NumAxes() - 1);
         EXPECT_EQ(offset, offset2);
         EXPECT_EQ(offset, offset3);
         EXPECT_EQ(Equal(sub_shape1, sub_shape2), true);

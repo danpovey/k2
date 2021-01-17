@@ -277,14 +277,21 @@ class RaggedShapeAxis0Splitter {
 
   /*
     This is provided in case you need to know how the indexes of the sub-pieces
-    relate to the indexes of the original array; GetElemOffset(i, axis)
+    relate to the indexes of the original array; GetOffset(i, axis)
     gives the offset of an index on axis `axis - 1` of GetElement(i) versus axis
     `axis` of `src`.
 
-    GetElemOffset(i, src.NumAxes() - 1) will equal the `elem_offset`
+    GetOffset(i, src.NumAxes() - 1) will equal the `elem_offset`
     output by `GetElement(i, &elem_offset)`.
+
+
+    Below, `src` refers to the argument to the constructor.
+      @param [in] i  Element-index i, with 0 <= i <= src.Dim0()
+      @param [in] src_axis  Axis of `src`, with 0 = src_axis < src.NumAxes()
+      @return  Returns the offset, with 0 <= ans <= src.TotSize(src_axis)
+
   */
-  int32_t GetElemOffset(int32_t i, int32_t src_axis) {
+  int32_t GetOffset(int32_t i, int32_t src_axis) {
     return composite_row_splits_cpu_.Accessor()(src_axis, i);
   }
 
@@ -321,6 +328,38 @@ class RaggedShapeAxis0Splitter {
   Array1<int32_t> row_ids_out_[4];
 };
 
+
+template <typename T>
+class RaggedAxis0Splitter: public RaggedShapeAxis0Splitter {
+ public:
+  RaggedAxis0Splitter(Ragged<T> &src):
+      RaggedShapeAxis0Splitter(src.shape), values_(src.values) { }
+
+  /*
+     Return sub-part of `src`
+        @param [in] i   Index into axis 0 of `src`, with 0 <= i < src.Dim0().
+        @param [out] elem_offset  If not nullptr, will output to this
+                  location the offset into the `values` array that
+                  the answer's data starts from.  Will satisfy
+                  0 <= elem_offset <= src.NumElements().
+        @return  Returns the sub-part of `src`, with one fewer axis
+                  than `src`.  Is equivalent to calling src.Index(0, i,
+                  elem_offset), but more efficient if you'll do this for most of
+                  the `i`.
+  */
+  Ragged<T> GetElement(int32_t i, int32_t *elem_offset = nullptr) {
+    int32_t temp;
+    if (elem_offset == nullptr) elem_offset = &temp;
+    RaggedShape shape = RaggedShapeAxis0Splitter::GetElement(i, elem_offset);
+    return Ragged<T>(shape, values_.Arange(*elem_offset,
+                                           *elem_offset + shape.NumElements()));
+  }
+
+  // note, GetOffset() from the parent is available.
+ private:
+  Array1<T> values_;
+
+};
 
 
 /*

@@ -339,6 +339,10 @@ struct Ragged {
     K2_CHECK(IsCompatible(shape, values));
     K2_CHECK_EQ(shape.NumElements(), values.Dim());
   }
+
+  explicit Ragged(const RaggedShape &shape):
+      shape(shape), values(shape.Context(), shape.NumElements()) { }
+
   // Defined in ragged_ops_inl.h
   explicit Ragged(const std::string &src) {
     std::istringstream is(src);
@@ -358,10 +362,6 @@ struct Ragged {
   // shouldn't do anything with it.  Both members will be initialized with
   // default constructors.
   Ragged() = default;
-
-  // Note: 'values' will be uninitialized.
-  explicit Ragged(const RaggedShape &shape)
-      : shape(shape), values(shape.Context(), shape.NumElements()) {}
 
   Ragged &operator=(const Ragged<T> &src) = default;
   Ragged(const Ragged<T> &src) = default;
