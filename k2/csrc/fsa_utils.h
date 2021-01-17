@@ -549,7 +549,6 @@ Ragged<int32_t> ComposeArcMaps(Ragged<int32_t> &step1_arc_map,
  */
 void FixNumStates(FsaVec *fsas);
 
-
 }  // namespace k2
 
 #endif  //  K2_CSRC_FSA_UTILS_H_

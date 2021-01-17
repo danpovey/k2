@@ -1835,5 +1835,4 @@ void FixNumStates(FsaVec *fsas) {
                                      renumber_states);
 }
 
-
 }  // namespace k2
