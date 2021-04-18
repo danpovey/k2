@@ -619,6 +619,7 @@ static __global__ void DiscountedCumSumKernel(int N, int T,
     // the last arg is a callback functor that provides us the aggregate of this block
     // and which is expected to return the element that we want to add to
     BlockScan(temp_storage).InclusiveScan(elem, elem, op, prefix_callback);
+    __syncthreads();
 
     if (base_t + thread_idx < T)
       y[(base_t + thread_idx) * stride1] = elem.y;
